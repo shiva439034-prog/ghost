@@ -139,3 +139,170 @@
 
 </body>
 </html>
+from flask import Flask, render_template_string, request, redirect, url_for
+import sqlite3
+import os
+
+app = Flask(__name__)
+DB_NAME = "sovereign_empire.db"
+
+# 1. असली डेटाबेस सेटअप (मास्टर वॉल्ट और टोकन के लिए)
+def init_db():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS empire_state (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            vault_balance REAL,
+            tokens REAL,
+            status_msg TEXT
+        )
+    ''')
+    cursor.execute('SELECT COUNT(*) FROM empire_state')
+    if cursor.fetchone()[0] == 0:
+        cursor.execute('INSERT INTO empire_state (vault_balance, tokens, status_msg) VALUES (?, ?, ?)', 
+                       (25000.0, 1250.0, '🟢 Live & Operational'))
+    conn.commit()
+    conn.close()
+
+init_db()
+
+def get_empire_state():
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    state = cursor.execute('SELECT * FROM empire_state WHERE id = 1').fetchone()
+    conn.close()
+    return state
+
+def update_empire_state(vault, tokens, status):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('UPDATE empire_state SET vault_balance = ?, tokens = ?, status_msg = ? WHERE id = 1', 
+                   (vault, tokens, status))
+    conn.commit()
+    conn.close()
+
+# 2. शानदार विजुअल UI (HTML + Tailwind CSS + Database Dynamic Data)
+HTML_DASHBOARD = """
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GhostEngine v6.0 - Sovereign Empire OS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen p-4">
+    <div class="max-w-2xl mx-auto space-y-6">
+        
+        <!-- Header -->
+        <header class="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-2xl flex justify-between items-center">
+            <div>
+                <h1 class="text-xl font-black text-sky-400">👻 GHOSTENGINE v6.0</h1>
+                <p class="text-xs text-slate-400">Autonomous Sovereign Live Platform</p>
+            </div>
+            <span class="px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-semibold rounded-full animate-pulse">
+                {{ state.status_msg }}
+            </span>
+        </header>
+
+        <!-- Financial & Vault Grid (DB Connected) -->
+        <div class="grid grid-cols-2 gap-4">
+            <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-lg">
+                <span class="text-xs text-slate-400 uppercase font-bold">Master Vault</span>
+                <div class="text-xl font-bold text-indigo-400 mt-1">₹{{ "{:,.2f}".format(state.vault_balance) }}</div>
+            </div>
+            <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-lg">
+                <span class="text-xs text-slate-400 uppercase font-bold">Ecosystem Tokens</span>
+                <div class="text-xl font-bold text-amber-400 mt-1">🪙 {{ "{:,.1f}".format(state.tokens) }}</div>
+            </div>
+        </div>
+
+        <!-- 🎥 Video & Media Hub -->
+        <div class="bg-slate-900 border border-slate-800 p-5 rounded-xl space-y-3 shadow-lg">
+            <h3 class="text-sm font-bold text-sky-300 uppercase tracking-wider">📡 Live P2P Media Stream & Movies</h3>
+            <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 text-center">
+                <div class="aspect-video bg-slate-900 rounded flex items-center justify-center border border-slate-800 text-slate-500 text-xs mb-3">
+                    ▶️ [Sovereign Secure Media Player Active]
+                </div>
+                <button onclick="playMedia()" class="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold py-2.5 rounded-lg text-xs transition">
+                    🎬 नई मूवी या वीडियो स्ट्रीम चलाएं
+                </button>
+                <div id="media-output" class="text-xs text-emerald-400 mt-2 font-mono"></div>
+            </div>
+        </div>
+
+        <!-- 🧠 Neural Sync / Mental Focus Hub -->
+        <div class="bg-slate-900 border border-slate-800 p-5 rounded-xl space-y-3 shadow-lg">
+            <h3 class="text-sm font-bold text-emerald-400 uppercase tracking-wider">🧠 Neural Sync & Focus Engine</h3>
+            <select id="sync-mode" class="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white">
+                <option value="stress">तनाव मुक्ति (Instant Stress Relief)</option>
+                <option value="focus">गहरा फोकस (Deep Focus Mode)</option>
+            </select>
+            <button onclick="runNeuralSync()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2.5 rounded-lg text-xs transition">
+                ⚡ न्यूरल सिंक शुरू करें
+            </button>
+            <div id="neural-output" class="text-xs text-slate-300 font-mono bg-slate-950 p-2.5 rounded border border-slate-800"></div>
+        </div>
+
+        <!-- 💰 Autonomous Withdrawal (Connected to DB Action) -->
+        <div class="bg-slate-900 border border-slate-800 p-5 rounded-xl space-y-3 shadow-lg">
+            <h3 class="text-sm font-bold text-purple-400 uppercase tracking-wider">💰 Sovereign UPI / Bank Payout</h3>
+            <form action="/withdraw" method="POST">
+                <button type="submit" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-semibold py-2.5 rounded-lg text-xs transition shadow-md">
+                    💸 ₹5,000 मास्टर विथड्रॉल प्रोसेस करें (DB Sync)
+                </button>
+            </form>
+            <div class="text-xs text-slate-300 font-mono bg-slate-950 p-2.5 rounded border border-slate-800">
+                {{ msg if msg else "गेटवे तैयार है।" }}
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        function playMedia() {
+            document.getElementById("media-output").innerText = "🟢 पियर-टू-पियर स्ट्रीमिंग कनेक्ट हो गई: p2p://secure_stream_99";
+        }
+        function runNeuralSync() {
+            let mode = document.getElementById("sync-mode").value;
+            let out = document.getElementById("neural-output");
+            out.innerText = "सिंक हो रहा है...";
+            setTimeout(() => {
+                if(mode === 'stress') {
+                    out.innerText = "✨ स्टेटस: दिमाग पूरी तरह शांत और अल्फा वेव्स एक्टिव!";
+                } else {
+                    out.innerText = "🎯 स्टेटस: लेजर फोकस और हाई प्रोडक्टिविटी मोड ऑन!";
+                }
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
+"""
+
+@app.route("/")
+def index():
+    state = get_empire_state()
+    msg = request.args.get("msg", "")
+    return render_template_string(HTML_DASHBOARD, state=state, msg=msg)
+
+@app.route("/withdraw", methods=["POST"])
+def withdraw():
+    state = get_empire_state()
+    vault = state["vault_balance"]
+    tokens = state["tokens"]
+    
+    if vault >= 5000:
+        vault -= 5000
+        tokens += 50.0
+        msg = "✅ सफलता: ₹5,000 मास्टर विथड्रॉल प्रोसेस हुआ और डेटाबेस अपडेट हो गया।"
+    else:
+        msg = "❌ एरर: मास्टर वॉल्ट में पर्याप्त राशि नहीं है!"
+        
+    update_empire_state(vault, tokens, msg)
+    return redirect(url_for("index", msg=msg))
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
